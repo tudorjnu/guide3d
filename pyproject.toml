@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "test"
+version = "0.1.dev1"
+description = ""
+license = { file = "LICENSE" }
+authors = [
+    {name = "Tudor Jianu", email = "tudorjnu@gmail.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: Free for non-commercial use",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "opencv-python",
+    "numpy<2",
+    "matplotlib",
+    "pytorch-lightning",
+    "torchvision",
+    "wandb",
+    "scipy",
+    "trimesh",
+    "spectra",
+    "seaborn",
+    "lxml",
+    "shapely",
+    "plotly",
+    "transformers",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[project.scripts]
+run_env = "cathsim.console:cmd_run_env"
+visualize_agent = "cathsim.console:cmd_visualize_agent"
+train = "cathsim.console:cmd_train"
