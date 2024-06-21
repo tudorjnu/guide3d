@@ -194,9 +194,9 @@ def error_plot_reprojection(points1, points2, P1, P2, F, ax=None):
 if __name__ == "__main__":
     import annotation
     import paths
-    import reconstruct
 
     import calibration
+    import reconstruct
     import utils
 
     dataset_path = paths.test_dataset_path
