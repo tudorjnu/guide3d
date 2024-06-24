@@ -6,6 +6,8 @@ from shapely.ops import nearest_points
 
 import fn
 import plot
+import viz
+from calibration import F
 
 
 def order_matches(pts1, pts2):
@@ -117,13 +119,22 @@ def set_ax(ax):
     ax.set_zticklabels([])
 
 
+def is_tip_first(pts):
+    pt0 = pts[0]
+    pt_last = pts[-1]
+    if pt0[0] > pt_last[0]:
+        return True
+    else:
+        return False
+
+
 def reconstruct(pts1, pts2):
     import calibration
 
     F = calibration.F
 
     pts1_matches = match_points(pts1, pts2, F)
-    # pts2_matches = match_points(pts2, pts1, F)
+    pts2_matches = match_points(pts2, pts1, F)
 
     pass
 
@@ -133,14 +144,20 @@ def preprocess_points(pts1, pts2):
 
     import representations.curve as curve
 
+    if not is_tip_first(pts1):
+        pts1 = np.flip(pts1, axis=0)
+    if not is_tip_first(pts2):
+        pts2 = np.flip(pts2, axis=0)
+
     curve1 = curve.parametrize_curve(pts1, s=10)
     curve2 = curve.parametrize_curve(pts2, s=10)
 
     u1, u2 = curve1[1], curve2[1]
     tck1, tck2 = curve1[0], curve2[0]
-    u_min, u_max = max(u1[0], u2[0]), min(u1[-1], u2[-1])
+    u_min = 0
+    u_max = min(u1[-1], u2[-1])
 
-    u = np.linspace(u_min, u_max, 15)
+    u = np.linspace(u_min, u_max, 4)
 
     x1, y1 = splev(u, tck1)
     x2, y2 = splev(u, tck2)
@@ -157,10 +174,60 @@ def preprocess_points(pts1, pts2):
     return pts1, pts2
 
 
+def draw_line(img, line, color):
+    r, c, _ = img.shape
+    x0, y0 = map(int, [0, -line[2] / line[1]])
+    x1, y1 = map(int, [c, -(line[2] + line[0] * c) / line[1]])
+    img = cv2.line(img, (x0, y0), (x1, y1), color, 1)
+    return img
+
+
+def draw_pts_and_lines(img1, img2, pts):
+    lns = cv2.computeCorrespondEpilines(pts.reshape(-1, 1, 2), 1, F).reshape(-1, 3)
+
+    r, c, _ = img1.shape
+
+    for i, (pt, ln) in enumerate(zip(pts, lns)):
+        label = f"{i}"
+        color = np.random.randint(0, 255, 3).tolist()
+        img1 = cv2.circle(img1, tuple(pt), 5, color, -1)
+        img1 = cv2.putText(
+            img1,
+            label,
+            tuple(pt + np.array([10, 10])),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            2,
+            color,
+            2,
+        )
+
+        img2 = draw_line(img2, ln, color)
+    return img1, img2
+
+
+def plot_pts_and_epilines(pts1, pts2, img1, img2, F=F):
+    fig, axs = plt.subplots(2, 2)
+
+    img11, img12 = np.copy(img1), np.copy(img1)
+    img21, img22 = np.copy(img2), np.copy(img2)
+
+    img11, img21 = draw_pts_and_lines(img11, img21, pts1)
+    img22, img12 = draw_pts_and_lines(img22, img12, pts2)
+
+    axs[0, 0].imshow(img11)
+    axs[0, 0].axis("off")
+    axs[0, 1].imshow(img21)
+    axs[0, 1].axis("off")
+    axs[1, 0].imshow(img12)
+    axs[1, 0].axis("off")
+    axs[1, 1].imshow(img22)
+    axs[1, 1].axis("off")
+    plt.show()
+    plt.close()
+
+
 def main():
-    import plot
     import vars
-    import viz
 
     dataset_path = vars.dataset_path
 
@@ -175,87 +242,14 @@ def main():
         img1 = plt.imread(dataset_path / sample["img1"])
         img2 = plt.imread(dataset_path / sample["img2"])
 
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        plot.make_paired_plot(img1, img2, pts1, pts2, axs)
-        plt.show()
-        plt.close()
-        continue
-
-        pts_reconstructed = reconstruct(pts1, pts2)
-        exit()
-
-        img1 = plt.imread(dataset_path / sample["img1"])
-        img2 = plt.imread(dataset_path / sample["img2"])
-
         img1 = viz.convert_to_color(img1)
         img2 = viz.convert_to_color(img2)
 
-        ax = axs[i]
-        set_ax(ax)
+        plot_pts_and_epilines(pts1, pts2, img1, img2)
 
-        # exit()
-        #
-        # pts1_resampled = pts1_resampled.astype(np.int32)
-        # pts2_resampled = pts2_resampled.astype(np.int32)
-        #
-        # ln2 = cv2.computeCorrespondEpilines(
-        #     pts1_resampled.reshape(-1, 1, 2), 1, F
-        # ).reshape(-1, 3)
-        # ln1 = cv2.computeCorrespondEpilines(
-        #     pts2_resampled.reshape(-1, 1, 2), 2, F
-        # ).reshape(-1, 3)
-        #
-        # subset = np.linspace(0, len(pts1_resampled) - 1, 10, dtype=int)
-        # colors = fn.generate_colors(len(subset))
-        #
-        # pts1_resampled_sample = pts1_resampled[subset]
-        # pts2_resampled_sample = pts2_resampled[subset]
-        # ln1 = ln1[subset]
-        # ln2 = ln2[subset]
-        # pts3d = pts3d[subset]
-        #
-        # # img1 = viz.draw_points(img1, pts1_resampled_sample, colors)
-        # # img1 = viz.draw_lines(img1, ln1, colors)
-        # # img1 = viz.draw_points(img1, pts1_resampled)
-        # img1 = viz.draw_polyline(img1, pts1_resampled, color=(0, 0, 255))
-        #
-        # img2 = viz.draw_points(img2, pts2_resampled_sample, colors)
-        # img2 = viz.draw_lines(img2, ln2, colors)
-        #
-        # for i in range(len(pts3d)):
-        #     color = tuple(map(int, colors[i]))
-        #     ln_pts = fn.find_line_extremities(ln1[i], *img1.shape[:2])
-        #     intersections = find_intersections(ln_pts, pts1_resampled, True)
-        #     if intersections is not None:
-        #         # print(intersections)
-        #         # intersection = intersections[0].astype(np.int32)
-        #         if len(intersections) > 1:
-        #             img1 = viz.draw_polyline(img1, ln_pts, color)
-        #             for i, (intersection, color) in enumerate(
-        #                 zip(intersections, fn.generate_colors(len(intersections)))
-        #             ):
-        #                 color = tuple(map(int, color))
-        #                 img1 = cv2.circle(img1, tuple(intersection), 5, color, -1)
-        #                 # put text over points in img1
-        #                 cv2.putText(
-        #                     img1,
-        #                     f"({i}-{intersection[0]}, {intersection[1]})",
-        #                     tuple(intersection),
-        #                     cv2.FONT_HERSHEY_SIMPLEX,
-        #                     0.5,
-        #                     color,
-        #                     2,
-        #                 )
-        #             # img1 = cv2.circle(img1, tuple(intersection), 5, color, -1)
-        #
-        # fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-        # ax[1].imshow(img1)
-        # ax[1].axis("off")
-        # ax[0].imshow(img2)
-        # ax[0].axis("off")
-        # plt.show()
-        # plt.close()
-    # remove horizontal and vertical spacing between subplots
+        continue
+        pts_reconstructed = reconstruct(pts1, pts2)
+        exit()
     plt.show()
     plt.close()
 

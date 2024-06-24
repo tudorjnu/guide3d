@@ -51,6 +51,14 @@ def parse_key(key: str) -> dict:
     )
 
 
+def reorder_points(points: list) -> list:
+    pt0 = points[0]
+    pt_last = points[-1]
+    if pt0[0] < pt_last[0]:
+        points = points[::-1]
+    return points
+
+
 def make_json(dataset: dict, with_reconstruction: bool = False):
     root = []
 
@@ -70,11 +78,11 @@ def make_json(dataset: dict, with_reconstruction: bool = False):
                 "frame_number": frame_number,
                 "camera2": {
                     "image": annotation["image1"],
-                    "points": annotation["points1"].tolist(),
+                    "points": reorder_points(annotation["points1"].tolist()),
                 },
                 "camera1": {
                     "image": annotation["image2"],
-                    "points": annotation["points2"].tolist(),
+                    "points": reorder_points(annotation["points2"].tolist()),
                 },
             }
 

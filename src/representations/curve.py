@@ -8,10 +8,15 @@ def parametrize_curve(pts: np.ndarray, s: float = 0.5, k: int = 3, eps: float = 
     y = pts[:, 1]
 
     distances = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2 + eps)
-
     cumulative_distances = np.insert(np.cumsum(distances), 0, 0)
     tck, u = splprep([x, y], s=s, k=k, u=cumulative_distances)
     return tck, u
+
+
+def sample_curve(tck, u_min, u_max, n):
+    u = np.linspace(u_min, u_max, n)
+    x, y = splev(u, tck)
+    return np.column_stack([x, y]).astype(np.int32)
 
 
 def make_figure():

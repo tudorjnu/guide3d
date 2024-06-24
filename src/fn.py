@@ -162,9 +162,9 @@ def find_line_extremities(line, width, height):
     return np.array([pt1, pt2]).astype(np.int32)
 
 
-def find_intersections(pts1, pts2, verbose=False):
-    polyline1 = LineString(pts1)
-    polyline2 = LineString(pts2)
+def find_intersections(segment1, segment2, verbose=False):
+    polyline1 = LineString(segment1)
+    polyline2 = LineString(segment2)
 
     intersection = polyline1.intersection(polyline2)
 
@@ -191,12 +191,11 @@ def generate_colors(n):
 
 
 if __name__ == "__main__":
-    from calibration import P1, P2
-    from reconstruct import get_points
-
     import plot
     import vars
     from annot_parser import get_structured_dataset
+    from calibration import P1, P2
+    from reconstruct import get_points
 
     test_dataset_path = vars.test_dataset_path
     dataset = get_structured_dataset(test_dataset_path / "annotations.xml")
