@@ -2,11 +2,11 @@
 
 import json
 
+import numpy as np
 from parse_cvat import get_structured_dataset
-
-import calibration as cal
-import fn
-from reconstruct import get_points
+from reconstruction import reconstruct
+from representations import curve
+from tqdm import tqdm
 
 
 def extract_properties(name: str) -> (str, str):
@@ -86,12 +86,96 @@ def make_json(dataset: dict, with_reconstruction: bool = False):
                 },
             }
 
+            frames.append(frame)
+        video_pair["frames"] = frames
+        root.append(video_pair)
+
+    return root
+
+
+def decompose_tck(tck):
+    assert isinstance(tck, list) or isinstance(
+        tck, tuple
+    ), f"tck should be a tuple or list, but got {type(tck)}\n"
+
+    t, c, k = tck
+    assert isinstance(t, np.ndarray), f"t should be a numpy array, but got {type(t)}\n"
+    assert isinstance(c, list), f"c should be a list, but got {type(c)}\n"
+    assert isinstance(k, int), f"k should be an integer, but got {type(k)}\n"
+
+    t = t.tolist()
+    c = [c_i.tolist() for c_i in c]
+
+    return t, c, k
+
+
+def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
+    root = []
+
+    for key, value in tqdm(dataset.items()):
+        properties = parse_key(key)
+
+        video_pair = {}
+        video_pair["fluid"] = properties["fluid"]
+        video_pair["guidewire_type"] = properties["guidewire_type"]
+        video_pair["video_number"] = properties["video_number"]
+        video_pair["frame_count"] = len(value)
+        video_pair["task"] = key
+
+        frames = []
+        for frame_number, annotation in tqdm(value.items()):
+            imageA = annotation["image1"]
+            imageB = annotation["image2"]
+            ptsA = reorder_points(annotation["points1"].tolist())
+            ptsB = reorder_points(annotation["points2"].tolist())
+
+            ptsA = np.array(ptsA)
+            ptsB = np.array(ptsB)
+
+            tckA, uA = curve.fit_spline(ptsA, s=0.3)
+            tckB, uB = curve.fit_spline(ptsB, s=0.3)
+
+            # needed for JSON
+            tA, cA, kA = decompose_tck(tckA)
+            tB, cB, kB = decompose_tck(tckB)
+
+            frame = {
+                "frame_number": frame_number,
+                "cameraA": {
+                    "image": imageA,
+                    "tck": {
+                        "t": tA,
+                        "c": cA,
+                        "k": kA,
+                    },
+                    "u": uA.tolist(),
+                },
+                "cameraB": {
+                    "image": imageB,
+                    "tck": {
+                        "t": tB,
+                        "c": cB,
+                        "k": kB,
+                    },
+                    "u": uB.tolist(),
+                },
+            }
+
             if with_reconstruction:
-                _, _, pts3D = get_points(
-                    annotation["points1"], annotation["points2"], cal.P1, cal.P2
-                )
-                pts3D = fn.interpolate_even_spacing(pts3D, 0.2)
-                frame["reconstruction"] = pts3D.tolist()
+                u_max = min(uA[-1], uB[-1])
+                tck3d, u3d = reconstruct(tckA, tckB, u_max)
+                if tck3d is None:
+                    continue
+                t3d, c3d, k3d = decompose_tck(tck3d)
+                u3d = u3d.tolist()
+                frame["3d"] = {
+                    "tck": {
+                        "t": t3d,
+                        "c": c3d,
+                        "k": k3d,
+                    },
+                    "u": u3d,
+                }
 
             frames.append(frame)
         video_pair["frames"] = frames
@@ -104,6 +188,10 @@ def main():
     dataset = get_structured_dataset("data/annotations/cvat.xml")
 
     dataset = parse_into_dict(dataset)
+
+    with open("data/annotations/sphere.json", "w") as f:
+        json_data = make_json_spherical(dataset, with_reconstruction=True)
+        json.dump(json_data, f, indent=2)
 
     with open("data/annotations/raw.json", "w") as f:
         json_data = make_json(dataset)

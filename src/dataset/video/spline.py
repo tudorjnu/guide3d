@@ -1,5 +1,6 @@
+import json
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -7,42 +8,99 @@ import torchvision.transforms as transforms
 from torch.utils import data
 from torchvision import io
 
-import annot_parser
+
+def preprocess_tck(
+    tck: Dict,
+) -> List:
+    t = tck["t"]
+    c = tck["c"]
+    k = tck["k"]
+
+    t = np.array(t)
+    c = [np.array(c_i) for c_i in c]
+    k = int(k)
+
+    return t, c, k
 
 
 def process_data(
-    data: List[List[Dict[str, Union[str, np.ndarray]]]],
-) -> List[List[Dict[str, Union[str, np.ndarray]]]]:
+    data: Dict,
+    seq_len: int = 3,
+    cameras: str = "A",
+) -> List:
     videos = []
     for video_pair in data:
-        video1 = []
-        video2 = []
-        for frame in video_pair:
-            video1.append(
-                dict(
-                    img=frame["img1"]["path"],
-                    pts=frame["img1"]["points"],
-                    reconstruction=frame["reconstruction"],
-                )
-            )
-            video2.append(
-                dict(
-                    img=frame["img2"]["path"],
-                    pts=frame["img2"]["points"],
-                    reconstruction=frame["reconstruction"],
-                )
-            )
-        videos.append(video1)
-        videos.append(video2)
+        videoA = []
+        videoB = []
+        for frame in video_pair["frames"]:
+            imageA = frame["cameraA"]["image"]
+            imageB = frame["cameraB"]["image"]
 
-    return videos
+            tckA = preprocess_tck(frame["cameraA"]["tck"])
+            tckB = preprocess_tck(frame["cameraB"]["tck"])
+
+            uA = np.array(frame["cameraA"]["u"])
+            uB = np.array(frame["cameraB"]["u"])
+
+            tck3D = preprocess_tck(frame["3d"]["tck"])
+            u3D = np.array(frame["3d"]["u"])
+
+            videoA.append(
+                dict(
+                    image=imageA,
+                    tck=tckA,
+                    u=uA,
+                    tck3D=tck3D,
+                    u3D=u3D,
+                )
+            )
+            videoB.append(
+                dict(
+                    image=imageB,
+                    tck=tckB,
+                    u=uB,
+                    tck3D=tck3D,
+                    u3D=u3D,
+                )
+            )
+
+        if "A" in cameras:
+            videos.append(videoA)
+        if "B" in cameras:
+            videos.append(videoB)
+
+    new_videos = []
+    for video in videos:
+        new_video = []
+        for i in range(0, len(video) - seq_len + 1):
+            new_video.append(video[i : i + seq_len])
+        new_videos.append(new_video)
+
+    return new_videos
+
+
+def split_video_data(
+    data: List,
+    split: tuple = (0.8, 0.1, 0.1),
+) -> List:
+    train_data = []
+    val_data = []
+    test_data = []
+
+    for video in data:
+        train_idx = int(split[0] * len(video))
+        val_idx = int(split[1] * len(video))
+        train_data.extend(video[:train_idx])
+        val_data.extend(video[train_idx : train_idx + val_idx])
+        test_data.extend(video[train_idx + val_idx :])
+    return train_data, val_data, test_data
 
 
 class Guide3D(data.Dataset):
     def __init__(
         self,
         root: str,
-        annotations_file: str = "annotations.xml",
+        annotations_file: str = "sphere.json",
         image_transform: transforms.Compose = None,
         pts_transform: callable = None,
         seg_len: int = 3,
@@ -52,11 +110,9 @@ class Guide3D(data.Dataset):
     ):
         self.root = Path(root)
         self.annotations_file = annotations_file
-        self.data = annot_parser.parse_to_video_separated(
-            self.root / self.annotations_file, seg_len
-        )
-        self.data = process_data(self.data)
-
+        raw_data = json.load(open(self.root / self.annotations_file))
+        data = process_data(raw_data)
+        train_data, val_data, test_data = split_video_data(data, split_ratio)
         assert split in [
             "train",
             "val",
@@ -64,18 +120,11 @@ class Guide3D(data.Dataset):
         ], "Split should be one of 'train', 'val', 'test'"
 
         if split == "train":
-            self.data = self.data[: int(split_ratio[0] * len(self.data))]
+            self.data = train_data
         elif split == "val":
-            self.data = self.data[
-                int(split_ratio[0] * len(self.data)) : int(
-                    split_ratio[0] * len(self.data) + split_ratio[1] * len(self.data)
-                )
-            ]
+            self.data = val_data
         elif split == "test":
-            self.data = self.data[
-                int(split_ratio[0] * len(self.data))
-                + int(split_ratio[1] * len(self.data)) :
-            ]
+            self.data = test_data
 
         self.image_transform = image_transform
         self.pts_transform = pts_transform
@@ -88,8 +137,11 @@ class Guide3D(data.Dataset):
 
     def __getitem__(self, index):
         data_entry = self.data[index]
-        imgs_paths = [self.root / img_path for img_path in data_entry["imgs1_paths"]]
+        print(data_entry)
+        exit()
+        imgs_paths = [self.root / img_path for img_path in data_entry["image"]]
         imgs = [io.read_image(img_path.as_posix()) for img_path in imgs_paths]
+        exit()
 
         if self.image_transform:
             imgs = [self.image_transform(img) for img in imgs]
@@ -108,3 +160,15 @@ class Guide3D(data.Dataset):
         pts = torch.stack(pts, dim=0)
 
         return imgs, pts, lengths
+
+
+def main():
+    import vars
+
+    dataset = Guide3D(root=vars.dataset_path, split="train")
+    print(len(dataset))
+    # sample = dataset[0]
+
+
+if __name__ == "__main__":
+    main()

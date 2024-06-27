@@ -13,6 +13,27 @@ def parametrize_curve(pts: np.ndarray, s: float = 0.5, k: int = 3, eps: float = 
     return tck, u
 
 
+def fit_spline(pts: np.ndarray, s: float = 0.5, k: int = 3, eps: float = 1e-10):
+    dims = pts.shape[1]
+    if dims == 2:
+        x = pts[:, 0]
+        y = pts[:, 1]
+        distances = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2 + eps)
+        cumulative_distances = np.insert(np.cumsum(distances), 0, 0)
+        tck, u = splprep([x, y], s=s, k=k, u=cumulative_distances)
+        return tck, u
+    elif dims == 3:
+        x = pts[:, 0]
+        y = pts[:, 1]
+        z = pts[:, 2]
+        distances = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2 + np.diff(z) ** 2 + eps)
+        cumulative_distances = np.insert(np.cumsum(distances), 0, 0)
+        tck, u = splprep([x, y, z], s=s, k=k, u=cumulative_distances)
+        return tck, u
+    else:
+        raise ValueError("Input points must be 2D or 3D")
+
+
 def sample_curve(tck, u_min, u_max, n):
     u = np.linspace(u_min, u_max, n)
     x, y = splev(u, tck)

@@ -1,9 +1,7 @@
 from pathlib import Path
 
 import numpy as np
-from scipy.linalg import null_space, pinv
-
-from calibration.refinement import refine_fundamental_matrix
+from scipy.linalg import null_space, pinv, svd
 
 
 def parse_calibration_file(filepath: Path):
@@ -121,6 +119,48 @@ def skew_symmetric_matrix(vector):
     )
 
 
+def get_F(P_A, P_B):
+    """
+    Compute the fundamental matrix F from two 3x4 projection matrices P_A and P_B.
+
+    Parameters:
+    P_A (np.ndarray): The 3x4 projection matrix for camera A.
+    P_B (np.ndarray): The 3x4 projection matrix for camera B.
+
+    Returns:
+    np.ndarray: The 3x3 fundamental matrix F.
+    """
+
+    # Find the camera centers
+    U_A, S_A, V_A = svd(P_A)
+    C_A = V_A[-1, :]
+    C_A = C_A / C_A[-1]  # Homogeneous coordinates
+
+    U_B, S_B, V_B = svd(P_B)
+    C_B = V_B[-1, :]
+    C_B = C_B / C_B[-1]  # Homogeneous coordinates
+
+    # Compute the epipoles
+    e_B = P_B @ C_A
+    e_B = e_B / e_B[-1]  # Normalize to homogeneous coordinates
+
+    e_A = P_A @ C_B
+    e_A = e_A / e_A[-1]  # Normalize to homogeneous coordinates
+
+    # Compute the skew-symmetric matrix [e_B]_x
+    e_B_skew = np.array(
+        [[0, -e_B[2], e_B[1]], [e_B[2], 0, -e_B[0]], [-e_B[1], e_B[0], 0]]
+    )
+
+    # Compute the pseudoinverse of P_A
+    P_A_pseudo_inv = pinv(P_A)
+
+    # Compute the fundamental matrix
+    F = e_B_skew @ P_B @ P_A_pseudo_inv
+
+    return F
+
+
 calibration_path = Path(__file__).parent / "2024-03-04" / "norm"
 
 P1_data = parse_calibration_file(calibration_path / "16710.txt")
@@ -138,12 +178,9 @@ P2 = get_projection_matrix(K2, R2, t2)
 d2 = np.array(P2_data["undistortion"]) if "undistortion" in P2_data else None
 
 E = get_essential_matrix(R1, t1.flatten())
-F = get_fundamental_matrix(K1, K2, t1, t2, R1, R2)
-F = refine_fundamental_matrix(F)
-F_A_B = compute_fundamental_matrix(P1, P2)
-F_B_A = compute_fundamental_matrix(P2, P1)
-# print("F1\n", F1)
-# print("F2\n", F2)
+F = get_F(P1, P2)
+F_A_B = get_F(P1, P2)
+F_B_A = get_F(P2, P1)
 
 
 if __name__ == "__main__":
