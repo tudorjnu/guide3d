@@ -40,6 +40,13 @@ def sample_curve(tck, u_min, u_max, n):
     return np.column_stack([x, y]).astype(np.int32)
 
 
+def sample_spline(tck, u_max: float, delta: float):
+    num_samples = int(u_max / delta) + 1
+    u = np.linspace(0, u_max, num_samples)
+    x, y = splev(u, tck)
+    return np.column_stack([x, y]).astype(np.int32)
+
+
 def make_figure():
     fig, axs = plt.subplots(3, 2, sharex=True, sharey=True)
     axs = axs.flatten()
