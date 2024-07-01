@@ -50,7 +50,7 @@ def draw_pts_and_lines(ptsA, ptsB, imgA, imgB, F):
     return imgA, imgB
 
 
-def make_epilines_plot(ptsA, ptsB, imgA, imgB, F, tckA, uA, tckB, uB):
+def make_epilines_plot(ptsA, ptsB, imgA, imgB, F, tckA, uA, tckB, uB, i):
     def set_up_fig():
         fig, axs = plt.subplots(1, 2, figsize=(4.5, 2))
 
@@ -71,8 +71,8 @@ def make_epilines_plot(ptsA, ptsB, imgA, imgB, F, tckA, uA, tckB, uB):
 
     imgA, imgB = draw_pts_and_lines(ptsA, ptsB, imgA, imgB, F)
 
-    plt.imsave("figs/raw/epilines/A.png", imgA)
-    plt.imsave("figs/raw/epilines/B.png", imgB)
+    plt.imsave(f"figs/raw/epilines/{i}_A.png", imgA)
+    plt.imsave(f"figs/raw/epilines/{i}_B.png", imgB)
 
     axs[0].imshow(imgA)
     axs[1].imshow(imgB)
@@ -81,7 +81,6 @@ def make_epilines_plot(ptsA, ptsB, imgA, imgB, F, tckA, uA, tckB, uB):
     fig.savefig("figs/epilines.png")
     plt.show()
     plt.close()
-    exit()
 
 
 def make_reprojection_plot():
@@ -105,6 +104,8 @@ def make_3D_plot():
 
 
 def main():
+    data = get_data()
+    exit()
     make_epilines_plot()
     make_reprojection_plot()
     make_3D_plot()

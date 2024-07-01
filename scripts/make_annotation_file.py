@@ -2,11 +2,32 @@
 
 import json
 
+import cv2
+import matplotlib.pyplot as plt
 import numpy as np
+import utils.viz as viz
+import vars
 from parse_cvat import get_structured_dataset
 from reconstruction import reconstruct
 from representations import curve
+from representations.curve import viz as curve_viz
 from tqdm import tqdm
+
+
+def viz_curve(img, tck, u_max, pts=None):
+    img = plt.imread(vars.dataset_path / img)
+    img = viz.convert_to_color(img)
+    img = curve_viz.draw_curve(img, tck, u_max)
+    if pts is not None:
+        pts = np.array(pts, dtype=np.int32)
+        img = viz.draw_polyline(img, pts, color=(0, 255, 0))
+
+    new_h = int(img.shape[0] * 0.5)
+    new_w = int(img.shape[1] * 0.5)
+
+    cv2.imshow("img", cv2.resize(img, (new_w, new_h)))
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 def extract_properties(name: str) -> (str, str):
@@ -132,8 +153,10 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
             ptsA = np.array(ptsA)
             ptsB = np.array(ptsB)
 
-            tckA, uA = curve.fit_spline(ptsA, s=0.3)
-            tckB, uB = curve.fit_spline(ptsB, s=0.3)
+            tckA, uA = curve.fit_spline(ptsA, s=0.2)
+            tckB, uB = curve.fit_spline(ptsB, s=0.2)
+
+            # viz_curve(imageA, tckA, uA[-1], ptsA)
 
             # needed for JSON
             tA, cA, kA = decompose_tck(tckA)
@@ -163,7 +186,7 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
 
             if with_reconstruction:
                 u_max = min(uA[-1], uB[-1])
-                tck3d, u3d = reconstruct(tckA, tckB, u_max)
+                tck3d, u3d = reconstruct(tckA, tckB, u_max, s=0.6, n=40)
                 if tck3d is None:
                     continue
                 t3d, c3d, k3d = decompose_tck(tck3d)
@@ -193,13 +216,13 @@ def main():
         json_data = make_json_spherical(dataset, with_reconstruction=True)
         json.dump(json_data, f, indent=2)
 
-    with open("data/annotations/raw.json", "w") as f:
-        json_data = make_json(dataset)
-        json.dump(json_data, f, indent=2)
-
-    with open("data/annotations/3d.json", "w") as f:
-        json_data = make_json(dataset)
-        json.dump(json_data, f, indent=2)
+    # with open("data/annotations/raw.json", "w") as f:
+    #     json_data = make_json(dataset)
+    #     json.dump(json_data, f, indent=2)
+    #
+    # with open("data/annotations/3d.json", "w") as f:
+    #     json_data = make_json(dataset)
+    #     json.dump(json_data, f, indent=2)
 
 
 if __name__ == "__main__":

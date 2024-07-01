@@ -3,9 +3,11 @@ from typing import Dict, List
 import calibration
 import matplotlib.pyplot as plt
 import numpy as np
+import representations.curve.viz as curve_viz
+import vars
 from representations import curve
 from scipy.interpolate import splev
-from utils import fn
+from utils import fn, viz
 
 
 def parse_frame(frame: Dict):
@@ -60,9 +62,11 @@ def get_data():
 def get_errors(data: Dict, camera: str = "A", delta: float = 15):
     def process_frame(frame: Dict):
         if camera == "A":
+            img = frame["imgA"]
             tck = frame["tckA"]
             u = frame["uA"]
         elif camera == "B":
+            img = frame["imgB"]
             tck = frame["tckB"]
             u = frame["uB"]
         tck3d = frame["tck3d"]
@@ -71,6 +75,9 @@ def get_errors(data: Dict, camera: str = "A", delta: float = 15):
         camera_matrix = calibration.P1 if camera == "A" else calibration.P2
         pts3d = np.column_stack(splev(u3d, tck3d))
         pts3d_reprojected = fn.project_points(pts3d, camera_matrix)
+        img = plt.imread(vars.dataset_path / img)
+        img = viz.convert_to_color(img)
+        img = curve_viz.draw_curve(img, tck, u[-1])
 
         s = 0.5
         success = False
@@ -82,6 +89,15 @@ def get_errors(data: Dict, camera: str = "A", delta: float = 15):
                 print("RuntimeError", e)
                 s += 0.1
 
+        img = curve_viz.draw_curve(
+            img,
+            tck_reprojected,
+            u_reprojected[-1],
+            color=(255, 0, 0),
+        )
+        plt.imshow(img)
+        plt.show()
+        plt.close()
         u_max = min(u[-1], u_reprojected[-1])
         ground_truth = curve.sample_spline(tck, u_max, delta)
         reprojection = curve.sample_spline(tck_reprojected, u_max, delta)
@@ -150,6 +166,7 @@ def make_reprojection_error_plot(data):
         )
         return fig, ax
 
+    data = clean_data(data)
     mean_errorsA, std_errorsA = get_errors(data, "A")
     mean_errorsB, std_errorsB = get_errors(data, "B")
 
@@ -179,6 +196,25 @@ def make_reprojection_error_plot(data):
     plt.tight_layout()
     fig.savefig("figs/reconstruction_reprojection_error.png")
     plt.close()
+
+
+def clean_data(data: List[Dict]):
+    for frame in data:
+        frame["tckA"] = preprocess_tck(frame["tckA"])
+        frame["tckB"] = preprocess_tck(frame["tckB"])
+        frame["tck3d"] = preprocess_tck(frame["tck3d"])
+        frame["uA"] = np.array(frame["uA"])
+        frame["uB"] = np.array(frame["uB"])
+        frame["u3d"] = np.array(frame["u3d"])
+
+        ptsA = np.column_stack(splev(frame["uA"], frame["tckA"]))
+        if np.any(ptsA > 1024) or np.any(ptsA < 0):
+            print("Invalid ptsA")
+            exit()
+        ptsB = np.column_stack(splev(frame["uB"], frame["tckB"]))
+        if np.any(ptsB > 1024) or np.any(ptsB < 0):
+            print("Invalid ptsB")
+            exit()
 
 
 def main():

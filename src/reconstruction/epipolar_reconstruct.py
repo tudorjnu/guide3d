@@ -11,13 +11,12 @@ from matplotlib import pyplot as plt
 from scipy.interpolate import PchipInterpolator, splev
 from scipy.optimize import minimize_scalar
 
-import reconstruction.epipolar.fig as ep_fig
-import reconstruction.epipolar.plot as ep_plot
 import reconstruction.epipolar.utils as ep_utils
 import reconstruction.epipolar.viz as ep_viz
 from reconstruction import triangulation
 
 ep_viz = ep_viz
+i = 0
 
 
 def get_data():
@@ -145,10 +144,12 @@ def get_curve_3d(
     tckA: Tuple[np.ndarray, List[np.ndarray], int],
     tckB: Tuple[np.ndarray, List[np.ndarray], int],
     u_max: float,
-    n: int = 50,
+    n: int = 100,
     others: dict = {},
     visualize: bool = False,
+    s=1,
 ):
+    global i
     try:
         # find matching u values
         uA, uA_matches = match_points(tckA, tckB, u_max, n, calibration.F_A_B)
@@ -170,28 +171,30 @@ def get_curve_3d(
             u2_mathces = interpolate_matches(u2, u2_mathces)
             pts2 = np.column_stack(splev(u2, tckB))
             pts2_matches = np.column_stack(splev(u2_mathces, tckA))
-            ep_plot.plot_with_matches(
-                ptsA, pts2, ptsA_matches, pts2_matches, img1, img2
-            )
-            ep_fig.make_epilines_plot(
-                ptsA,
-                ptsA_matches,
-                img1,
-                img2,
-                calibration.F_A_B,
-                tckA,
-                others["u1"],
-                tckB,
-                others["u2"],
-            )
+            # ep_plot.plot_with_matches(
+            #     ptsA, pts2, ptsA_matches, pts2_matches, img1, img2
+            # )
+            # ep_fig.make_epilines_plot(
+            #     ptsA,
+            #     ptsA_matches,
+            #     img1,
+            #     img2,
+            #     calibration.F_A_B,
+            #     tckA,
+            #     others["u1"],
+            #     tckB,
+            #     others["u2"],
+            #     i,
+            # )
 
+        i += 1
         reconstructed_pts = triangulation.reconstruct(
             ptsA, ptsB, calibration.P1, calibration.P2, calibration.F_A_B
         )
 
         reconstructed_pts = remove_duplicates(reconstructed_pts)
 
-        tck3d, u3D = curve.fit_spline(reconstructed_pts, s=0.5)
+        tck3d, u3D = curve.fit_spline(reconstructed_pts, s=s)
 
         if visualize:
             reconstructed_pts = np.column_stack(splev(u3D, tck3d))
@@ -208,7 +211,7 @@ def get_curve_3d(
             )
             ax.view_init(5, 180)
             plot.plot_mesh(plot.get_mesh(), ax)
-            # plt.show()
+            plt.show()
             plt.close()
 
         return tck3d, u3D
@@ -225,7 +228,7 @@ def main():
 
     dataset_path = vars.dataset_path
 
-    samples = get_data()[:1]
+    samples = get_data()[:4]
 
     for i, sample in enumerate(samples):
         pts1 = np.array(sample["pts1"])
@@ -235,8 +238,8 @@ def main():
         tck2, u2 = curve.fit_spline(pts2, s=0.2)
 
         u_max = min(u1[-1], u2[-1])
-        pts1 = curve.sample_curve(tck1, 0, u_max, 5)
-        pts2 = curve.sample_curve(tck2, 0, u_max, 5)
+        pts1 = curve.sample_spline_n(tck1, 0, u_max, 5)
+        pts2 = curve.sample_spline_n(tck2, 0, u_max, 5)
 
         img1 = plt.imread(dataset_path / sample["img1"])
         img2 = plt.imread(dataset_path / sample["img2"])
@@ -249,7 +252,7 @@ def main():
             tck1,
             tck2,
             u_max,
-            10,
+            30,
             {
                 "img1": img1,
                 "img2": img2,

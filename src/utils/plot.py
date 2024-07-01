@@ -7,8 +7,10 @@ import utils.viz as viz
 
 
 def get_mesh(transformed=False):
-    mesh = trimesh.load_mesh(Path(__file__).parent / "assets/mesh.stl")
-    affine_matrix = np.load(Path(__file__).parent / "assets/transformation_matrix.npy")
+    mesh = trimesh.load_mesh(Path(__file__).parent.parent / "assets/mesh.stl")
+    affine_matrix = np.load(
+        Path(__file__).parent.parent / "assets/transformation_matrix.npy"
+    )
     if transformed:
         mesh.apply_transform(affine_matrix)
     return mesh
