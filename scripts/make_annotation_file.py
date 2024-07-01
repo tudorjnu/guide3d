@@ -2,6 +2,7 @@
 
 import json
 
+import calibration
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,12 +13,15 @@ from reconstruction import reconstruct
 from representations import curve
 from representations.curve import viz as curve_viz
 from tqdm import tqdm
+from utils.fn import project_points
+
+i = 0
 
 
-def viz_curve(img, tck, u_max, pts=None):
+def viz_curve(img, tck, u, pts=None, show=False):
     img = plt.imread(vars.dataset_path / img)
     img = viz.convert_to_color(img)
-    img = curve_viz.draw_curve(img, tck, u_max)
+    img = curve_viz.draw_curve(img, tck, u)
     if pts is not None:
         pts = np.array(pts, dtype=np.int32)
         img = viz.draw_polyline(img, pts, color=(0, 255, 0))
@@ -25,9 +29,116 @@ def viz_curve(img, tck, u_max, pts=None):
     new_h = int(img.shape[0] * 0.5)
     new_w = int(img.shape[1] * 0.5)
 
-    cv2.imshow("img", cv2.resize(img, (new_w, new_h)))
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    if show:
+        cv2.imshow("img", cv2.resize(img, (new_w, new_h)))
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return img
+
+
+def remove_close_points(pts, delta):
+    cleaned_pts = [pts[0]]  # Start with the first point
+
+    len_before = len(pts)
+    for i in range(1, len(pts)):
+        prev_point = cleaned_pts[-1]
+        current_point = pts[i]
+        distance = np.linalg.norm(np.array(prev_point) - np.array(current_point))
+
+        if distance >= delta:
+            cleaned_pts.append(current_point)
+
+    len_after = len(cleaned_pts)
+    # print(f"Removed {len_before - len_after} points")
+    return cleaned_pts
+
+
+def viz_curve_w_reprojection(
+    imgA, imgB, tckA, tckB, tck3d, uA, uB, u3d, originalA, originalB, show=False
+):
+    viz_path = vars.viz_dataset_path / "reprojection" / imgA.split("/")[0]
+    if not viz_path.exists():
+        viz_path.mkdir(parents=True, exist_ok=True)
+
+    img_num = imgA.split("/")[-1].split(".")[0]
+
+    imgA = plt.imread(vars.dataset_path / imgA)
+    imgB = plt.imread(vars.dataset_path / imgB)
+
+    imgA = viz.convert_to_color(imgA)
+    imgB = viz.convert_to_color(imgB)
+
+    ptsA = curve.sample_spline(tckA, uA, delta=20)
+    ptsB = curve.sample_spline(tckB, uB, delta=20)
+    # print("Points:", len(ptsA), len(ptsB))
+
+    pts3d = curve.sample_spline(tck3d, u3d, delta=0.1)
+    ptsA_reprojected = project_points(pts3d, calibration.P1)
+    ptsB_reprojected = project_points(pts3d, calibration.P2)
+    # print("len reprojected", len(ptsA_reprojected), len(ptsB_reprojected))
+
+    # cv2.imshow(
+    #     "imgA",
+    #     cv2.resize(viz.draw_polyline(imgB, ptsB, color=(0, 255, 0)), (512, 512)),
+    # )
+    # cv2.waitKey(1)
+    # cv2.destroyAllWindows()
+    fig, axs = plt.subplots(1, 2, figsize=(5, 3), sharex=True, sharey=True)
+    plot_defaults = {"markersize": 0.4, "linewidth": 0.7, "alpha": 0.6}
+    for ax in axs:
+        ax.axis("off")
+    axs[0].imshow(imgA, cmap="gray")
+    axs[1].imshow(imgB, cmap="gray")
+
+    axs[0].plot(ptsA[:, 0], ptsA[:, 1], "g", label="original", **plot_defaults)
+    axs[1].plot(ptsB[:, 0], ptsB[:, 1], "g", label="original", **plot_defaults)
+
+    axs[0].plot(
+        ptsA_reprojected[:, 0],
+        ptsA_reprojected[:, 1],
+        "r",
+        label="reprojected",
+        **plot_defaults,
+    )
+    axs[1].plot(
+        ptsB_reprojected[:, 0],
+        ptsB_reprojected[:, 1],
+        "r",
+        label="reprojected",
+        **plot_defaults,
+    )
+
+    axs[0].plot(
+        originalA[:, 0],
+        originalA[:, 1],
+        "b.",
+        label="original",
+        **plot_defaults,
+    )
+
+    axs[1].plot(
+        originalB[:, 0],
+        originalB[:, 1],
+        "b.",
+        label="original",
+        **plot_defaults,
+    )
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    fig.legend(
+        by_label.values(),
+        by_label.keys(),
+        ncol=2,
+        borderaxespad=0.1,
+        handletextpad=0.1,
+    )
+    fig.savefig(viz_path / f"{img_num}.png", pad_inches=0, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close()
+    pass
 
 
 def extract_properties(name: str) -> (str, str):
@@ -131,6 +242,7 @@ def decompose_tck(tck):
 
 
 def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
+    global i
     root = []
 
     for key, value in tqdm(dataset.items()):
@@ -149,14 +261,19 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
             imageB = annotation["image2"]
             ptsA = reorder_points(annotation["points1"].tolist())
             ptsB = reorder_points(annotation["points2"].tolist())
+            ptsA = remove_close_points(ptsA, 20)
+            ptsB = remove_close_points(ptsB, 20)
+            originalA = np.copy(ptsA)
+            originalB = np.copy(ptsB)
 
             ptsA = np.array(ptsA)
             ptsB = np.array(ptsB)
 
-            tckA, uA = curve.fit_spline(ptsA, s=0.2)
-            tckB, uB = curve.fit_spline(ptsB, s=0.2)
+            tckA, uA = curve.fit_spline(ptsA)
+            tckB, uB = curve.fit_spline(ptsB)
 
-            # viz_curve(imageA, tckA, uA[-1], ptsA)
+            vizA = viz_curve(imageA, tckA, uA, ptsA)
+            vizB = viz_curve(imageB, tckB, uB, ptsB)
 
             # needed for JSON
             tA, cA, kA = decompose_tck(tckA)
@@ -186,7 +303,7 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
 
             if with_reconstruction:
                 u_max = min(uA[-1], uB[-1])
-                tck3d, u3d = reconstruct(tckA, tckB, u_max, s=0.6, n=40)
+                tck3d, u3d = reconstruct(tckA, tckB, uA, uB, delta=20)
                 if tck3d is None:
                     continue
                 t3d, c3d, k3d = decompose_tck(tck3d)
@@ -201,6 +318,20 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
                 }
 
             frames.append(frame)
+            viz_curve_w_reprojection(
+                imageA,
+                imageB,
+                tckA,
+                tckB,
+                tck3d,
+                uA,
+                uB,
+                u3d,
+                originalA,
+                originalB,
+                show=False,
+            )
+            i += 1
         video_pair["frames"] = frames
         root.append(video_pair)
 
@@ -212,13 +343,14 @@ def main():
 
     dataset = parse_into_dict(dataset)
 
-    with open("data/annotations/sphere.json", "w") as f:
-        json_data = make_json_spherical(dataset, with_reconstruction=True)
+    json_data = make_json(dataset)
+    with open("data/annotations/raw.json", "w") as f:
         json.dump(json_data, f, indent=2)
 
-    # with open("data/annotations/raw.json", "w") as f:
-    #     json_data = make_json(dataset)
-    #     json.dump(json_data, f, indent=2)
+    json_data = make_json_spherical(dataset, with_reconstruction=True)
+    with open("data/annotations/sphere.json", "w") as f:
+        json.dump(json_data, f, indent=2)
+
     #
     # with open("data/annotations/3d.json", "w") as f:
     #     json_data = make_json(dataset)

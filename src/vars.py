@@ -4,6 +4,7 @@ import seaborn as sns
 
 test_dataset_path = Path.cwd() / "data"
 dataset_path = Path.home() / "data" / "segment-real"
+viz_dataset_path = Path.home() / "data" / "segment-real-viz"
 
 colors = {
     "matplotlib-colors": [
