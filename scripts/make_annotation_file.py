@@ -57,7 +57,11 @@ def remove_close_points(pts, delta):
 def viz_curve_w_reprojection(
     imgA, imgB, tckA, tckB, tck3d, uA, uB, u3d, originalA, originalB, show=False
 ):
-    viz_path = vars.viz_dataset_path / "reprojection" / imgA.split("/")[0]
+    viz_path = imgA.split("/")[0]
+    viz_path = viz_path.split("-")[:-1]
+    viz_path = "-".join(viz_path)
+    viz_path = vars.viz_dataset_path / "reprojection" / viz_path
+
     if not viz_path.exists():
         viz_path.mkdir(parents=True, exist_ok=True)
 
@@ -71,7 +75,9 @@ def viz_curve_w_reprojection(
 
     ptsA = curve.sample_spline(tckA, uA, delta=20)
     ptsB = curve.sample_spline(tckB, uB, delta=20)
-    # print("Points:", len(ptsA), len(ptsB))
+
+    _, cA, _ = tckA
+    _, cB, _ = tckB
 
     pts3d = curve.sample_spline(tck3d, u3d, delta=0.1)
     ptsA_reprojected = project_points(pts3d, calibration.P1)
@@ -91,8 +97,11 @@ def viz_curve_w_reprojection(
     axs[0].imshow(imgA, cmap="gray")
     axs[1].imshow(imgB, cmap="gray")
 
-    axs[0].plot(ptsA[:, 0], ptsA[:, 1], "g", label="original", **plot_defaults)
-    axs[1].plot(ptsB[:, 0], ptsB[:, 1], "g", label="original", **plot_defaults)
+    axs[0].plot(cA[0], cA[1], "yo", label="control points", **plot_defaults)
+    axs[1].plot(cB[0], cB[1], "yo", label="control points", **plot_defaults)
+
+    axs[0].plot(ptsA[:, 0], ptsA[:, 1], "g", label="original curve", **plot_defaults)
+    axs[1].plot(ptsB[:, 0], ptsB[:, 1], "g", label="original curve", **plot_defaults)
 
     axs[0].plot(
         ptsA_reprojected[:, 0],
@@ -112,16 +121,15 @@ def viz_curve_w_reprojection(
     axs[0].plot(
         originalA[:, 0],
         originalA[:, 1],
-        "b.",
-        label="original",
+        "bo",
+        label="original points",
         **plot_defaults,
     )
-
     axs[1].plot(
         originalB[:, 0],
         originalB[:, 1],
-        "b.",
-        label="original",
+        "bo",
+        label="original points",
         **plot_defaults,
     )
 
@@ -242,8 +250,8 @@ def decompose_tck(tck):
 
 
 def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
-    global i
     root = []
+    valid_frames = 0
 
     for key, value in tqdm(dataset.items()):
         properties = parse_key(key)
@@ -272,8 +280,8 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
             tckA, uA = curve.fit_spline(ptsA)
             tckB, uB = curve.fit_spline(ptsB)
 
-            vizA = viz_curve(imageA, tckA, uA, ptsA)
-            vizB = viz_curve(imageB, tckB, uB, ptsB)
+            # vizA = viz_curve(imageA, tckA, uA, ptsA, show=True)
+            # vizB = viz_curve(imageB, tckB, uB, ptsB)
 
             # needed for JSON
             tA, cA, kA = decompose_tck(tckA)
@@ -302,7 +310,6 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
             }
 
             if with_reconstruction:
-                u_max = min(uA[-1], uB[-1])
                 tck3d, u3d = reconstruct(tckA, tckB, uA, uB, delta=20)
                 if tck3d is None:
                     continue
@@ -316,7 +323,10 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
                     },
                     "u": u3d,
                 }
-
+            # check if there are too few points
+            if tck3d[1][0].shape[0] < 4:
+                continue
+            valid_frames += 1
             frames.append(frame)
             viz_curve_w_reprojection(
                 imageA,
@@ -331,9 +341,10 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
                 originalB,
                 show=False,
             )
-            i += 1
+
         video_pair["frames"] = frames
         root.append(video_pair)
+    print(f"Valid frames: {valid_frames}")
 
     return root
 

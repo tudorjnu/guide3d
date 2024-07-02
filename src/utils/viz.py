@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import spectra as sp
 import vars
+from representations import curve
 
 
 def _check_points(points):
@@ -14,6 +15,12 @@ def _check_image(image):
         image.shape[0] == 3 or image.shape[-1] == 3
     ), "Image is in grayscale format, use convert_to_color"
     assert image.dtype == np.uint8, "Image should be in uint8 format"
+
+
+def str_to_tuple_color(color):
+    color = sp.html(color).to("rgb").values
+    color = tuple(map(lambda x: int(x * 255), color))
+    return color
 
 
 def convert_to_color(image):
@@ -29,6 +36,8 @@ def convert_to_color(image):
 def draw_polyline(image, points, color=None):
     _check_image(image)
     _check_points(points)
+    if not isinstance(color, tuple):
+        color = str_to_tuple_color(color)
     image = np.copy(image)
     points = points.reshape((-1, 1, 2))
     if color is None:
@@ -72,6 +81,12 @@ def draw_points(image, points, colors=None):
         color = tuple(map(int, color))
         cv2.circle(image, point, 5, color, -1)
     return image
+
+
+def draw_curve(img, tck, u, **kwargs):
+    pts = curve.sample_spline(tck, u, delta=10)
+    img = draw_polyline(img, pts, **kwargs)
+    return img
 
 
 if __name__ == "__main__":

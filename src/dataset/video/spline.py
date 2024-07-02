@@ -42,16 +42,16 @@ def process_data(
             uA = np.array(frame["cameraA"]["u"])
             uB = np.array(frame["cameraB"]["u"])
 
-            tck3D = preprocess_tck(frame["3d"]["tck"])
-            u3D = np.array(frame["3d"]["u"])
+            tck3d = preprocess_tck(frame["3d"]["tck"])
+            u3d = np.array(frame["3d"]["u"])
 
             videoA.append(
                 dict(
                     image=imageA,
                     tck=tckA,
                     u=uA,
-                    tck3D=tck3D,
-                    u3D=u3D,
+                    tck3d=tck3d,
+                    u3d=u3d,
                 )
             )
             videoB.append(
@@ -59,8 +59,8 @@ def process_data(
                     image=imageB,
                     tck=tckB,
                     u=uB,
-                    tck3D=tck3D,
-                    u3D=u3D,
+                    tck3d=tck3d,
+                    u3d=u3d,
                 )
             )
 
