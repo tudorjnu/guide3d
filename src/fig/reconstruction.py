@@ -3,7 +3,6 @@ from typing import Dict, List
 import calibration
 import matplotlib.pyplot as plt
 import numpy as np
-import vars
 from representations import curve
 from scipy.interpolate import splev
 from utils import fn
@@ -160,18 +159,10 @@ def get_errors(data: Dict, camera: str = "A", delta: float = 15):
     # Calculate the Euclidean distance between the ground truth and reprojected points
     distance = np.linalg.norm(ground_truth - reprojected, axis=2)
     print("Distance shape:", distance.shape)
-    #
-    # Calculate the mean and standard deviation of these distances pointwise
-    mean_errors = np.nanmean(distance, axis=0)
-    std_errors = np.nanstd(distance, axis=0)
-
-    print("Mean errors shape:", mean_errors.shape)
-    print("Std errors shape:", std_errors.shape)
 
     # Find the maximum error and its index for each point
     max_errors = np.nanmax(distance, axis=1)
     max_error_indices = np.nanargmax(distance, axis=1)
-
     print("Max errors shape:", max_errors.shape)
     print("Max error indices shape:", max_error_indices.shape)
 
@@ -179,28 +170,35 @@ def get_errors(data: Dict, camera: str = "A", delta: float = 15):
     sorted_indices = np.argsort(-max_errors)
     sorted_max_errors = max_errors[sorted_indices]
     sorted_max_error_indices = max_error_indices[sorted_indices]
-
     print("Sorted max errors shape:", sorted_max_errors.shape)
     print("Sorted max error indices shape:", sorted_max_error_indices.shape)
-    # exit()
 
-    for i in sorted_indices[:5]:
-        print(f"Index {i}, max error: {max_errors[i]}")
-        gt = ground_truth[i]
-        rp = reprojected[i]
-        print(f"Max error for frame {i}: {max_errors[i]}")
-        print("img path:", vars.dataset_path / imgs[i])
-        img = plt.imread(vars.dataset_path / imgs[i])
-        plot_reprojected(img, gt, rp, show=True)
+    # for i in sorted_indices[:10]:
+    #     print(f"Index {i}, max error: {max_errors[i]}")
+    #     gt = ground_truth[i]
+    #     rp = reprojected[i]
+    #     print(f"Max error for frame {i}: {max_errors[i]}")
+    #     print("img path:", vars.dataset_path / imgs[i])
+    #     img = plt.imread(vars.dataset_path / imgs[i])
+    #     # plot_reprojected(img, gt, rp, show=True)
 
-    # print("Mean errors:", mean_errors.shape)
-    # print("Std errors:", std_errors.shape)
+    # remove outliers
+    top_outliers_indices = sorted_indices[:10]
+    distance = np.delete(distance, top_outliers_indices, axis=0)
+    print("Distance shape:", distance.shape)
+
+    # Calculate the mean and standard deviation of these distances pointwise
+    mean_errors = np.nanmean(distance, axis=0)
+    std_errors = np.nanstd(distance, axis=0)
+    print("Mean errors shape:", mean_errors.shape)
+    print("Std errors shape:", std_errors.shape)
+
     return mean_errors, std_errors
 
 
 def make_reprojection_error_plot(data):
     def setup_fig():
-        fig, ax = plt.subplots(1, 1, figsize=(2, 1))
+        fig, ax = plt.subplots(1, 1, figsize=(2.4, 1))
         ax.set_ylabel("Error (pixels)")
         ax.set_xlabel("Point Index")
         ax.grid(
@@ -217,6 +215,15 @@ def make_reprojection_error_plot(data):
     data = clean_data(data)
     mean_errorsA, std_errorsA = get_errors(data, "A")
     mean_errorsB, std_errorsB = get_errors(data, "B")
+
+    print("Mean errors A:", mean_errorsA)
+    print("Standard deviation errors A:", std_errorsA)
+    print("Mean errors B:", mean_errorsB)
+    print("Standard deviation errors B:", std_errorsB)
+
+    # # remove outliers
+    # top_outliers_indices = set(top_outliers_indicesA) | set(top_outliers_indicesB)
+    # print("Outliers:", top_outliers_indices)
 
     max_len = min(len(mean_errorsA), len(mean_errorsB))
     mean_errorsA = mean_errorsA[:max_len]
@@ -248,10 +255,8 @@ def make_reprojection_error_plot(data):
         label="Camera B",
         **ax_props,
     )
-    plt.tight_layout()
-    fig.legend(loc="upper center", bbox_to_anchor=(0.5, 1.1), ncol=2)
-    plt.show()
-    fig.savefig("figs/reconstruction_reprojection_error.png")
+    fig.legend(loc="upper center", bbox_to_anchor=(0.5, 1.2), ncol=2)
+    fig.savefig("figs/reconstruction_reprojection_error.png", bbox_inches="tight")
     plt.close()
 
 
@@ -273,9 +278,12 @@ def clean_data(data: List[Dict]):
 
 
 def main():
+    # get matplotlibrc params
     data = get_data()
     print(len(data))
     make_reprojection_error_plot(data)
+    rc_params = plt.rcParams
+    # print(rc_params)
     pass
 
 

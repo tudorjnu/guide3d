@@ -101,7 +101,7 @@ def main():
         # plt.close()
 
         # pts3d = np.column_stack(splev(u3d, tck3d))
-        # plot.make_3d_plot_with_mesh(pts3d)
+        # plot.maks_3d_plot_with_mesh(pts3d)
         # plt.show()
         # plt.close()
 

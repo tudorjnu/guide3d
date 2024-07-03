@@ -3,20 +3,19 @@ from typing import List, Tuple
 import calibration
 import cv2
 import numpy as np
+import reconstruction.epipolar.fig as ep_fig
+import reconstruction.epipolar.plot as ep_plot
+import reconstruction.epipolar.utils as ep_utils
+import reconstruction.epipolar.viz as ep_viz
 import representations.curve as curve
 import scipy.optimize as opt
 import utils.fn as fn
 import utils.plot as plot
 import utils.viz as viz
 from matplotlib import pyplot as plt
+from reconstruction import triangulation
 from scipy.interpolate import PchipInterpolator, splev
 from scipy.optimize import minimize_scalar
-
-import reconstruction.epipolar.fig as ep_fig
-import reconstruction.epipolar.plot as ep_plot
-import reconstruction.epipolar.utils as ep_utils
-import reconstruction.epipolar.viz as ep_viz
-from reconstruction import triangulation
 
 ep_viz = ep_viz
 i = 0
