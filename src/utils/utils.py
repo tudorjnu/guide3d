@@ -9,16 +9,32 @@ def parse(annotation_file: str) -> List:
     return json_file
 
 
-def parametrize_curve(pts: np.ndarray, s: float = 0.5, k: int = 3):
-    from scipy.interpolate import splprep
+def get_data(
+    annotation_file: str = "data/annotations/raw.json", frames: List = [70, 100, 150]
+) -> List:
+    import json
 
-    x = pts[:, 0]
-    y = pts[:, 1]
-    z = pts[:, 2]
-    distances = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2 + np.diff(z) ** 2)
-    cumulative_distances = np.insert(np.cumsum(distances), 0, 0)
-    tck, u = splprep([x, y, z], s=s, k=k, u=cumulative_distances)
-    return tck, u
+    dummy_data = []
+    annotations = json.load(open(annotation_file))
+    for video in annotations:
+        for frame in video["frames"]:
+            if frame["frame_number"] in frames:
+                dummy_data.append(
+                    {
+                        "img1": frame["camera1"]["image"],
+                        "img2": frame["camera2"]["image"],
+                        "pts1": np.array(frame["camera1"]["points"]),
+                        "pts2": np.array(frame["camera2"]["points"]),
+                    }
+                )
+    return dummy_data
+
+
+def decompose_path(img_path: str) -> str:
+    path = img_path.split("/")[0]
+    camera = path.split("-")[-2]
+    img_number = img_path.split("/")[-1].split(".")[0]
+    return path, camera, img_number
 
 
 if __name__ == "__main__":

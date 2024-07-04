@@ -33,7 +33,7 @@ def convert_to_color(image):
     return converted_image
 
 
-def draw_polyline(image, points, color=None):
+def draw_polyline(image, points, color=None, **kwargs):
     _check_image(image)
     _check_points(points)
     if not isinstance(color, tuple):
@@ -43,8 +43,16 @@ def draw_polyline(image, points, color=None):
     if color is None:
         color = sp.html(vars.colors["polyline-colors"]).to("rgb").values
         color = tuple(map(lambda x: int(x * 255), color))
-    cv2.polylines(image, [np.int32(points)], isClosed=False, color=color, thickness=2)
+    cv2.polylines(image, [np.int32(points)], isClosed=False, color=color, **kwargs)
     return image
+
+
+def draw_line(img, line, color, **kwargs):
+    r, c, _ = img.shape
+    x0, y0 = map(int, [0, -line[2] / line[1]])
+    x1, y1 = map(int, [c, -(line[2] + line[0] * c) / line[1]])
+    img = cv2.line(img, (x0, y0), (x1, y1), color, **kwargs)
+    return img
 
 
 def draw_lines(img, lines, colors=None):
