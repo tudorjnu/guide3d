@@ -11,7 +11,6 @@ import vars
 from parse_cvat import get_structured_dataset
 from reconstruction import reconstruct
 from representations import curve
-from representations.curve import viz as curve_viz
 from tqdm import tqdm
 from utils.fn import project_points
 
@@ -323,25 +322,25 @@ def make_json_spherical(dataset: dict, with_reconstruction: bool = False):
                     },
                     "u": u3d,
                 }
-            # check if there are too few points
-            if tck3d[1][0].shape[0] < 4:
-                continue
-            valid_frames += 1
-            frames.append(frame)
-            viz_curve_w_reprojection(
-                imageA,
-                imageB,
-                tckA,
-                tckB,
-                tck3d,
-                uA,
-                uB,
-                u3d,
-                originalA,
-                originalB,
-                show=False,
-            )
+                # check if there are too few points
+                if tck3d[1][0].shape[0] < 4:
+                    continue
+                valid_frames += 1
+                viz_curve_w_reprojection(
+                    imageA,
+                    imageB,
+                    tckA,
+                    tckB,
+                    tck3d,
+                    uA,
+                    uB,
+                    u3d,
+                    originalA,
+                    originalB,
+                    show=False,
+                )
 
+            frames.append(frame)
         video_pair["frames"] = frames
         root.append(video_pair)
     print(f"Valid frames: {valid_frames}")
@@ -358,8 +357,8 @@ def main():
     with open("data/annotations/raw.json", "w") as f:
         json.dump(json_data, f, indent=2)
 
-    json_data = make_json_spherical(dataset, with_reconstruction=True)
-    with open("data/annotations/sphere.json", "w") as f:
+    json_data = make_json_spherical(dataset, with_reconstruction=False)
+    with open("data/annotations/sphere_wo_reconstruct.json", "w") as f:
         json.dump(json_data, f, indent=2)
 
     #

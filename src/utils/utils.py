@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 
@@ -35,6 +35,20 @@ def decompose_path(img_path: str) -> str:
     camera = path.split("-")[-2]
     img_number = img_path.split("/")[-1].split(".")[0]
     return path, camera, img_number
+
+
+def preprocess_tck(
+    tck: Dict,
+) -> List:
+    t = tck["t"]
+    c = tck["c"]
+    k = tck["k"]
+
+    t = np.array(t)
+    c = [np.array(c_i) for c_i in c]
+    k = int(k)
+
+    return t, c, k
 
 
 if __name__ == "__main__":

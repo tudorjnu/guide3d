@@ -1,62 +1,13 @@
-import xml.etree.ElementTree as ET
+import json
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import cv2
 import numpy as np
-import torch
+from representations import curve
 from torch.utils import data
-from torchvision import io, transforms
-
-from annot_parser import parse_points
-
-
-def parse_image(image_element):
-    """Parse an image element to extract its name and associated polylines."""
-    name = image_element.get("name")
-    polyline = parse_points(image_element.find("polyline"))
-    return name, polyline
-
-
-def pair_camera_annotations(annotations):
-    """Pair camera annotations based on naming convention and extract first polyline points."""
-
-    # Group annotations by task identifier (excluding camera number)
-
-    grouped_annotations = {}
-    for image_path, polyline in annotations:
-        task_identifier = image_path.split("/")[0]
-        sample_identifier = image_path.split("/")[1].split(".")[0]
-        camera_number = task_identifier[-1]
-        task_name = task_identifier[:-2] + sample_identifier
-
-        if task_name not in grouped_annotations:
-            grouped_annotations[task_name] = {}
-
-        if camera_number == "1":
-            grouped_annotations[task_name]["image1"] = image_path
-            grouped_annotations[task_name]["points1"] = polyline
-        elif camera_number == "2":
-            grouped_annotations[task_name]["image2"] = image_path
-            grouped_annotations[task_name]["points2"] = polyline
-
-    # get the values and flatten the dictionary
-    structured_dataset = [v for v in grouped_annotations.values()]
-
-    # remove incomplete pairs
-    structured_dataset = [pair for pair in structured_dataset if len(pair) == 4]
-
-    return structured_dataset
-
-
-def parse_annotation_file(file_path) -> List[Dict[str, Union[str, np.ndarray]]]:
-    tree = ET.parse(file_path)
-    root = tree.getroot()
-
-    annotations = [parse_image(image) for image in root.findall("image")]
-    paired_annotations = pair_camera_annotations(annotations)
-    return paired_annotations
-
+from torchvision import transforms
+from utils.utils import preprocess_tck
 
 image_transforms = transforms.Compose(
     [
@@ -69,53 +20,115 @@ image_transforms = transforms.Compose(
 )
 
 
-def polyline_to_mask(polyline):
+def process_data(
+    data: Dict,
+) -> List:
+    video_pairs = []
+    for video_pair in data:
+        videoA = []
+        videoB = []
+        for frame in video_pair["frames"]:
+            imageA = frame["cameraA"]["image"]
+            imageB = frame["cameraB"]["image"]
+
+            tckA = preprocess_tck(frame["cameraA"]["tck"])
+            tckB = preprocess_tck(frame["cameraB"]["tck"])
+
+            uA = np.array(frame["cameraA"]["u"]).astype(np.float32)
+            uB = np.array(frame["cameraB"]["u"]).astype(np.float32)
+
+            videoA.append(
+                dict(
+                    image=imageA,
+                    mask=make_mask(tckA, uA),
+                )
+            )
+            videoB.append(
+                dict(
+                    image=imageB,
+                    mask=make_mask(tckB, uB),
+                )
+            )
+        video_pairs.append(videoA)
+        video_pairs.append(videoB)
+
+    return video_pairs
+
+
+def make_mask(tck, u, delta=0.1):
     """make a segmentation mask from a polyline"""
+    pts = curve.sample_spline(tck, u, delta=delta).astype(np.int32)
+
     mask = np.zeros((1024, 1024), dtype=np.uint8)
-    pts = np.array(polyline, dtype=np.int32)
+    pts = np.array(pts, dtype=np.int32)
     pts = pts.reshape((-1, 1, 2))
     cv2.polylines(mask, [pts], isClosed=False, color=(255, 0, 255), thickness=2)
-    # mask should be binary
     mask = mask // 255
     return mask
 
 
-def split_annotations(annotations):
-    splitted_annotations = []
-    for annot in annotations:
-        pts1 = annot["points1"]
-        pts2 = annot["points2"]
-        img1 = annot["image1"]
-        img2 = annot["image2"]
-        splitted_annotations.append({"img": img1, "pts": pts1})
-        splitted_annotations.append({"img": img2, "pts": pts2})
-    return splitted_annotations
+def split_video_data(
+    data: List,
+    split: tuple = (0.8, 0.1, 0.1),
+) -> List:
+    train_data = []
+    val_data = []
+    test_data = []
+
+    for video in data:
+        train_idx = int(split[0] * len(video))
+        val_idx = int(split[1] * len(video))
+        train_data.extend(video[:train_idx])
+        val_data.extend(video[train_idx : train_idx + val_idx])
+        test_data.extend(video[train_idx + val_idx :])
+    return train_data, val_data, test_data
 
 
-class BESTDataset(data.Dataset):
-    def __init__(self, dataset_path: Path, annotation_file: str, image_transform=None):
-        self.dataset = parse_annotation_file(dataset_path / annotation_file)
-        self.dataset = split_annotations(self.dataset)
-        self.dataset_path = dataset_path
+class Guide3D(data.Dataset):
+    def __init__(
+        self,
+        root: str,
+        annotations_file: str = "sphere.json",
+        image_transform: transforms.Compose = None,
+        mask_transform: callable = None,
+        seg_len: int = 3,
+        max_len: int = 150,
+        split: str = "train",
+        split_ratio: tuple = (0.8, 0.1, 0.1),
+    ):
+        self.root = Path(root)
+        self.annotations_file = annotations_file
+        raw_data = json.load(open(self.root / self.annotations_file))
+        data = process_data(raw_data)
+        train_data, val_data, test_data = split_video_data(data, split_ratio)
+        assert split in [
+            "train",
+            "val",
+            "test",
+        ], "Split should be one of 'train', 'val', 'test'"
+
+        if split == "train":
+            self.data = train_data
+        elif split == "val":
+            self.data = val_data
+        elif split == "test":
+            self.data = test_data
+
         self.image_transform = image_transform
+        self.mask_transform = mask_transform
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.data)
 
-    def __getitem__(self, index):
-        data_entry = self.dataset[index]
-        img_path = self.dataset_path / data_entry["img"]
-        pts = data_entry["pts"]
-        mask = polyline_to_mask(pts)
-
-        img = io.read_image(img_path.as_posix())
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        img = cv2.imread(str(self.root / sample["image"]), cv2.IMREAD_GRAYSCALE)
+        mask = sample["mask"]
         if self.image_transform:
             img = self.image_transform(img)
-
-        pts = torch.tensor(pts, dtype=torch.float32)
-        mask = torch.tensor(mask, dtype=torch.int8)
-
-        return {"img": img, "mask": mask}
+        if self.mask_transform:
+            mask = self.mask_transform(mask)
+        return dict(img=img, mask=mask)
 
 
 def visualize_mask(img, mask):
@@ -127,13 +140,11 @@ def visualize_mask(img, mask):
     plt.show()
 
 
-def test_full_dataset():
+def test_dataset():
     import vars
 
     dataset_path = vars.dataset_path
-    dataset = BESTDataset(
-        dataset_path, "annotations.xml", image_transform=image_transforms
-    )
+    dataset = Guide3D(dataset_path, "sphere_wo_reconstruct.json")
     print(len(dataset))
     dataloader = data.DataLoader(dataset, batch_size=16, shuffle=True)
     for batch in dataloader:
@@ -142,4 +153,4 @@ def test_full_dataset():
 
 
 if __name__ == "__main__":
-    test_full_dataset()
+    test_dataset()
