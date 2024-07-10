@@ -5,9 +5,9 @@ from typing import Dict, List
 import cv2
 import numpy as np
 from guide3d.representations import curve
-from guide3d.torch.utils import data
-from guide3d.torchvision import transforms
 from guide3d.utils.utils import preprocess_tck
+from torch.utils import data
+from torchvision import transforms
 
 image_transforms = transforms.Compose(
     [
@@ -141,14 +141,15 @@ def visualize_mask(img, mask):
 
 
 def test_dataset():
-    import vars
+    import guide3d.vars as vars
 
     dataset_path = vars.dataset_path
     dataset = Guide3D(dataset_path, "sphere_wo_reconstruct.json")
     print(len(dataset))
     dataloader = data.DataLoader(dataset, batch_size=16, shuffle=True)
     for batch in dataloader:
-        print(batch["img"].shape, batch["mask"].shape)
+        img, mask = batch
+        print(img.shape, mask.shape)
         break
 
 
