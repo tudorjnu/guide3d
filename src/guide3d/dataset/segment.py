@@ -4,10 +4,10 @@ from typing import Dict, List
 
 import cv2
 import numpy as np
-from representations import curve
-from torch.utils import data
-from torchvision import transforms
-from utils.utils import preprocess_tck
+from guide3d.representations import curve
+from guide3d.torch.utils import data
+from guide3d.torchvision import transforms
+from guide3d.utils.utils import preprocess_tck
 
 image_transforms = transforms.Compose(
     [
@@ -128,7 +128,7 @@ class Guide3D(data.Dataset):
             img = self.image_transform(img)
         if self.mask_transform:
             mask = self.mask_transform(mask)
-        return dict(img=img, mask=mask)
+        return img, mask
 
 
 def visualize_mask(img, mask):
