@@ -1,5 +1,5 @@
-import calibration
 import cv2
+import guide3d.calibration as calibration
 import matplotlib.pyplot as plt
 import numpy as np
 

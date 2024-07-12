@@ -1,8 +1,8 @@
 import cv2
+import guide3d.vars as vars
 import numpy as np
 import spectra as sp
-import vars
-from representations import curve
+from guide3d.representations import curve
 
 
 def _check_points(points):

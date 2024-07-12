@@ -1,19 +1,18 @@
 from typing import List, Tuple
 
-import calibration
+import guide3d.reconstruction.epipolar.fig as ep_fig
+import guide3d.reconstruction.epipolar.plot as ep_plot
+import guide3d.reconstruction.epipolar.viz as ep_viz
+import guide3d.representations.curve as curve
+import guide3d.utils.plot as plot
+import guide3d.utils.viz as viz
 import numpy as np
-import representations.curve as curve
-import utils.plot as plot
-import utils.viz as viz
+from guide3d import calibration
+from guide3d.reconstruction import triangulation
+from guide3d.reconstruction.epipolar import fn as ep_fn
+from guide3d.utils.utils import get_data
 from matplotlib import pyplot as plt
 from scipy.interpolate import splev
-from utils.utils import get_data
-
-import reconstruction.epipolar.fig as ep_fig
-import reconstruction.epipolar.plot as ep_plot
-import reconstruction.epipolar.viz as ep_viz
-from reconstruction import triangulation
-from reconstruction.epipolar import fn as ep_fn
 
 ep_viz = ep_viz
 i = 0
@@ -109,7 +108,7 @@ reconstruct = get_curve_3d
 
 
 def main():
-    import vars
+    import guide3d.vars as vars
 
     dataset_path = vars.dataset_path
 

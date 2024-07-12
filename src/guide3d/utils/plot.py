@@ -1,9 +1,9 @@
 from pathlib import Path
 
+import guide3d.utils.viz as viz
 import matplotlib.pyplot as plt
 import numpy as np
 import trimesh
-import utils.viz as viz
 
 
 def get_mesh(transformed=False):
@@ -193,11 +193,11 @@ def error_plot_reprojection(points1, points2, P1, P2, F, ax=None):
 
 
 if __name__ == "__main__":
-    import annotation
-    import calibration
+    import guide3d.annotation as annotation
+    import guide3d.calibration as calibration
+    import guide3d.reconstruct as reconstruct
+    import guide3d.utils as utils
     import paths
-    import reconstruct
-    import utils
 
     dataset_path = paths.test_dataset_path
     dataset = annotation.get_structured_dataset(dataset_path / "annotations.xml")

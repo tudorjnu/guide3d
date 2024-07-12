@@ -1,9 +1,9 @@
 import cv2
+import guide3d.representations.curve as curve
+import guide3d.utils.utils as utils
+import guide3d.utils.viz as viz
 import numpy as np
-import representations.curve as curve
 import scipy.optimize as opt
-import utils.utils as utils
-import utils.viz as viz
 from scipy.interpolate import PchipInterpolator, splev
 from shapely.geometry import LineString
 

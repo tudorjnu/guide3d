@@ -1,7 +1,7 @@
 import cv2
+import guide3d.utils.viz as viz
 import matplotlib.pyplot as plt
 import numpy as np
-import utils.viz as viz
 from scipy.interpolate import splev
 
 
