@@ -57,6 +57,7 @@ def process_data(
 
 def make_mask(tck, u, delta=0.1):
     """make a segmentation mask from a polyline"""
+    tck = (tck[0], tck[1].T, tck[2])
     pts = curve.sample_spline(tck, u, delta=delta).astype(np.int32)
 
     mask = np.zeros((1024, 1024), dtype=np.uint8)
